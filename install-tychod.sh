@@ -135,6 +135,10 @@ systemctl stop tychod
 
 log_message "INFO" "Extracting to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
+log_message "INFO" "Creating NATS server directory..."
+mkdir -p "$INSTALL_DIR/nats"
+log_message "INFO" "Creating config directory..."
+mkdir -p "/etc/tychod/config"
 if ! tar -xzf "$PACKAGE" -C "$INSTALL_DIR"; then
   exit_with_error "Failed to extract $PACKAGE to $INSTALL_DIR"
 fi
@@ -144,6 +148,16 @@ rm "$PACKAGE" "$CHECKSUM"
 log_message "INFO" "Setting permissions..."
 chmod +x "$INSTALL_DIR/bin/"*
 
+# Verify tychod binary exists and is executable
+if [ ! -f "$INSTALL_DIR/bin/tychod" ]; then
+  exit_with_error "tychod binary not found at $INSTALL_DIR/bin/tychod"
+fi
+
+if [ ! -x "$INSTALL_DIR/bin/tychod" ]; then
+  log_message "WARN" "tychod binary is not executable, fixing permissions..."
+  chmod +x "$INSTALL_DIR/bin/tychod"
+fi
+
 log_message "INFO" "Linking tychod binary..."
 ln -sf "$INSTALL_DIR/bin/tychod" /usr/local/bin/tychod
 
@@ -151,7 +165,9 @@ ln -sf "$INSTALL_DIR/bin/tychod" /usr/local/bin/tychod
   tee "$SERVICE_FILE" > /dev/null <<EOF
 [Unit]
 Description=Tychod Service
-After=network.target
+After=network-online.target
+Wants=network-online.target
+Documentation=https://github.com/pdat-cz/tychod-install
 
 [Service]
 Type=simple
@@ -159,8 +175,10 @@ User=tychod
 Group=tychod
 WorkingDirectory=/opt/tychod
 ExecStart=/opt/tychod/bin/tychod --config /etc/tychod/config
-Restart=on-failure
-RestartSec=15
+Restart=always
+RestartSec=10
+TimeoutStartSec=60
+TimeoutStopSec=30
 StandardOutput=journal
 StandardError=journal
 
@@ -180,14 +198,42 @@ else
   log_message "INFO" "User 'tychod' already exists"
 fi
 
+# Ensure config directory has correct permissions
+log_message "INFO" "Setting config directory permissions..."
+chown -R tychod:tychod "/etc/tychod"
+chmod -R 755 "/etc/tychod"
+
 # Ensure /opt/tychod is owned by tychod
 chown -R tychod:tychod "$INSTALL_DIR"
 
 # Ensure permissions (directories: 755, files: 755 or 644 as appropriate)
-find "$INSTALL_DIR" -type d -exec chmod 750 {} \;
-find "$INSTALL_DIR" -type f -exec chmod 750 {} \;
+find "$INSTALL_DIR" -type d -exec chmod 755 {} \;
+find "$INSTALL_DIR" -type f -exec chmod 755 {} \;
+
+# Ensure NATS directory has proper permissions
+log_message "INFO" "Setting NATS directory permissions to 777 for download access..."
+chmod 777 "$INSTALL_DIR/nats"
 
 log_message "INFO" "Starting tychod..."
 systemctl start tychod
 
-log_message "INFO" "tychod ${VERSION} installed and running on ${FULL_ARCH}"
+# Wait a moment for the service to start
+sleep 2
+
+# Check if the service is running
+if systemctl is-active --quiet tychod; then
+  log_message "INFO" "tychod ${VERSION} installed and running on ${FULL_ARCH}"
+else
+  log_message "WARN" "tychod service failed to start. Checking status..."
+  systemctl status tychod
+  log_message "WARN" "Attempting to restart tychod..."
+  systemctl restart tychod
+  sleep 3
+
+  if systemctl is-active --quiet tychod; then
+    log_message "INFO" "tychod ${VERSION} installed and running on ${FULL_ARCH} after restart"
+  else
+    log_message "ERROR" "tychod service failed to start after restart. Please check logs with 'journalctl -u tychod'"
+    log_message "INFO" "Installation completed, but service is not running"
+  fi
+fi
