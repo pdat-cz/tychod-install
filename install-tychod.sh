@@ -130,8 +130,9 @@ log_message "INFO" "Downloading ${BASE_URL}/${PACKAGE}"
 log_message "INFO" "Verifying checksum..."
 sha256sum -c "$CHECKSUM"
 
-log_message "INFO" "Stopping service tychod"
-systemctl stop tychod
+if systemctl list-units --full -all | grep -q 'tychod.service'; then
+  systemctl stop tychod
+fi
 
 log_message "INFO" "Extracting to $INSTALL_DIR..."
 mkdir -p "$INSTALL_DIR"
