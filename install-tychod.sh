@@ -161,6 +161,14 @@ fi
 log_message "INFO" "Linking tychod binary..."
 ln -sf "$INSTALL_DIR/bin/tychod" /usr/local/bin/tychod
 
+# Link tychodctl CLI if present
+if [ -f "$INSTALL_DIR/bin/tychodctl" ]; then
+  log_message "INFO" "Linking tychodctl CLI..."
+  ln -sf "$INSTALL_DIR/bin/tychodctl" /usr/local/bin/tychodctl
+else
+  log_message "WARN" "tychodctl not found in package, CLI will not be installed"
+fi
+
   log_message "INFO" "Installing systemd service..."
   tee "$SERVICE_FILE" > /dev/null <<EOF
 [Unit]
