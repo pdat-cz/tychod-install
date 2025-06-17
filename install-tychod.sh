@@ -181,6 +181,7 @@ TimeoutStartSec=60
 TimeoutStopSec=30
 StandardOutput=journal
 StandardError=journal
+SyslogIdentifier=tychod
 
 [Install]
 WantedBy=multi-user.target
