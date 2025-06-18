@@ -208,6 +208,10 @@ else
   log_message "INFO" "User 'tychod' already exists"
 fi
 
+# Add tychod user to dialout group for serial port access
+log_message "INFO" "Adding tychod user to dialout group"
+usermod -a -G dialout tychod
+
 # Ensure config directory has correct permissions
 log_message "INFO" "Setting config directory permissions..."
 chown -R tychod:tychod "/etc/tychod"
